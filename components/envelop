@@ -1,0 +1,257 @@
+
+import React, { useEffect, useState, useRef } from 'react';
+
+enum CinematicStage {
+  Narrative,     // Frases iniciales
+  VideoPlay,     // El video comienza (sin texto overlay pesado)
+  FinalTitle     // Aparece el botón de continuar y controles refinados
+}
+
+export const CinematicSection: React.FC = () => {
+  const [stage, setStage] = useState<CinematicStage>(CinematicStage.Narrative);
+  const [textIndex, setTextIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isHoveringControls, setIsHoveringControls] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const controlsTimerRef = useRef<number | null>(null);
+  
+  const narrative = [
+    "Érase una vez una pequeña gran historia...",
+    "historia que empezó en la juventud…",
+    "sin mucho plan pero con demasiadas aventuras llenas de amor...",
+    "entre estas hoy, ahora toca celebrar que ...."
+  ];
+
+  // Control de la narrativa inicial (fase de texto)
+  useEffect(() => {
+    if (stage === CinematicStage.Narrative) {
+      const timer = setInterval(() => {
+        setTextIndex((prev) => {
+          if (prev < narrative.length - 1) {
+            return prev + 1;
+          } else {
+            clearInterval(timer);
+            setTimeout(() => setStage(CinematicStage.VideoPlay), 1200);
+            return prev;
+          }
+        });
+      }, 3400); 
+      return () => clearInterval(timer);
+    }
+  }, [stage, narrative.length]);
+
+  // 🎬 Iniciar video automáticamente cuando termina la narrativa
+  useEffect(() => {
+    if (stage === CinematicStage.VideoPlay) {
+
+      const v = videoRef.current;
+
+      if (v) {
+        v.currentTime = 0;
+        v.muted = true;
+
+        // 👇 Esto es lo que faltaba
+        v.play()
+          .then(() => setIsPlaying(true))
+          .catch(err => console.log("Autoplay blocked:", err));
+      }
+
+      const titleTimer = setTimeout(() => {
+        setStage(CinematicStage.FinalTitle);
+      }, 3000);
+
+      return () => clearTimeout(titleTimer);
+    }
+  }, [stage]);
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      const current = videoRef.current.currentTime;
+      const total = videoRef.current.duration;
+      setCurrentTime(current);
+      setProgress((current / total) * 100);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
+  };
+
+  const togglePlayPause = (e: React.MouseEvent) => {
+    // Si se hace clic en los controles o el botón de continuar, no toggleramos aquí
+    if ((e.target as HTMLElement).closest('.video-controls-area') || (e.target as HTMLElement).closest('button')) return;
+
+    if (!videoRef.current) return;
+
+    if (videoRef.current.paused) {
+      videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (videoRef.current) {
+      const newTime = (parseFloat(e.target.value) / 100) * duration;
+      videoRef.current.currentTime = newTime;
+      setProgress(parseFloat(e.target.value));
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const mins = Math.floor(time / 60);
+    const secs = Math.floor(time % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleContinue = () => {
+    const nextSection = document.getElementById('event-details');
+    if (nextSection) {
+      nextSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleMouseMove = () => {
+    setIsHoveringControls(true);
+    if (controlsTimerRef.current) {
+      window.clearTimeout(controlsTimerRef.current);
+    }
+    controlsTimerRef.current = window.setTimeout(() => {
+      setIsHoveringControls(false);
+    }, 3000);
+  };
+
+  return (
+    <section 
+      className="min-h-screen bg-black text-white relative flex flex-col items-center justify-center overflow-hidden"
+      onClick={togglePlayPause}
+      onMouseMove={handleMouseMove}
+    >
+      
+      {/* CAPA DE VIDEO */}
+      <div className={`absolute inset-0 z-0 transition-opacity duration-[1500ms] ease-in-out ${stage !== CinematicStage.Narrative ? 'opacity-80' : 'opacity-0'}`}>
+        <video 
+          ref={videoRef}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          className="w-full h-full object-cover grayscale-[10%] brightness-[0.6] scale-105"
+        >
+          <source src="intro.mp4" type="video/mp4" />
+          {/* Fallback en caso de que no exista el archivo local */}
+          <source src="https://assets.mixkit.co/videos/preview/mixkit-little-girl-playing-with-a-toy-in-a-park-4682-large.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black pointer-events-none"></div>
+      </div>
+
+      <div className="z-10 text-center px-6 max-w-5xl relative w-full h-full flex flex-col items-center justify-center">
+        
+        <div className="min-h-[350px] flex flex-col items-center justify-center relative w-full">
+          {/* ETAPA 1: Narrativa */}
+          {stage === CinematicStage.Narrative && (
+            <p 
+              key={`phrase-${textIndex}`}
+              className="font-serif text-2xl md:text-4xl leading-relaxed italic animate-story-text text-gray-100 px-4 drop-shadow-2xl"
+            >
+              {narrative[textIndex]}
+            </p>
+          )}
+
+          {/* ETAPA 3: Botón de continuar (Aparece sobre el video del usuario) */}
+          {stage === CinematicStage.FinalTitle && (
+            <div className="flex flex-col items-center animate-reveal-ui text-center">
+                <button 
+                  onClick={handleContinue}
+                  className="mt-12 group flex flex-col items-center cursor-pointer relative z-40 bg-transparent border-none"
+                >
+                  <span className="font-serif text-[12px] tracking-[0.7em] text-white/80 mb-6 uppercase italic group-hover:text-[#F6A5C0] group-hover:tracking-[0.9em] transition-all duration-500 drop-shadow-lg">
+                    Haz clic para continuar
+                  </span>
+                  <div className="w-[1.5px] h-20 bg-gradient-to-b from-[#F6A5C0] to-transparent group-hover:h-28 transition-all duration-500 animate-pulse"></div>
+                </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* CONTROLES DE VIDEO (Seekbar + Play/Pause) */}
+      <div className={`video-controls-area absolute bottom-0 left-0 w-full p-8 z-50 transition-all duration-700 transform ${isHoveringControls || !isPlaying ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}>
+        <div className="max-w-4xl mx-auto flex flex-col gap-4">
+          
+          {/* Barra de Progreso (Seekbar) */}
+          <div className="relative group w-full h-1 bg-white/20 rounded-full overflow-visible">
+            <input 
+              type="range"
+              min="0"
+              max="100"
+              value={progress}
+              onChange={handleSeek}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            />
+            <div 
+              className="absolute top-0 left-0 h-full bg-[#F6A5C0] shadow-[0_0_15px_rgba(246,165,192,0.8)] transition-all duration-150"
+              style={{ width: `${progress}%` }}
+            >
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full scale-0 group-hover:scale-100 transition-transform"></div>
+            </div>
+          </div>
+
+          {/* Botones y Tiempos */}
+          <div className="flex items-center justify-between text-white/60 font-serif text-[10px] tracking-widest uppercase">
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={() => {
+                   if(videoRef.current) {
+                     if(isPlaying) videoRef.current.pause();
+                     else videoRef.current.play();
+                     setIsPlaying(!isPlaying);
+                   }
+                }}
+                className="hover:text-white transition-colors"
+              >
+                {isPlaying ? 'PAUSE' : 'PLAY'}
+              </button>
+              <span>{formatTime(currentTime)}</span>
+            </div>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
+      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes story-text {
+          0% { opacity: 0; transform: translateY(30px); filter: blur(15px); }
+          100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+        @keyframes reveal-ui {
+          0% { opacity: 0; transform: translateY(40px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-story-text {
+          animation: story-text 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        .animate-reveal-ui {
+          animation: reveal-ui 2s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+        
+        /* Custom styles for range input if needed, but we use an invisible overlay */
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          height: 20px;
+          width: 20px;
+        }
+      `}} />
+    </section>
+  );
+};
