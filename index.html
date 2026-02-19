@@ -1,0 +1,45 @@
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { Envelope } from './components/Envelope';
+import { CinematicSection } from './components/CinematicSection';
+import { EditorialInfo } from './components/EditorialInfo';
+import { Footer } from './components/Footer';
+
+const App: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [showContent, setShowContent] = useState(false);
+
+  // High-speed transition after envelope opening
+  const handleOpen = useCallback(() => {
+    setIsOpen(true);
+    setTimeout(() => {
+      setShowContent(true);
+    }, 300);
+  }, []);
+
+  return (
+    <main className="relative min-h-screen bg-watercolor overflow-hidden">
+      {!showContent ? (
+        <Envelope isOpen={isOpen} onOpen={handleOpen} />
+      ) : (
+        <div className="fade-in animate-content-reveal">
+          <CinematicSection />
+          <EditorialInfo />
+          <Footer />
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes content-reveal {
+          from { opacity: 0; transform: scale(1.05); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-content-reveal {
+          animation: content-reveal 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+      `}} />
+    </main>
+  );
+};
+
+export default App;
